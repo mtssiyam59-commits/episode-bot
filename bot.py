@@ -13,6 +13,7 @@ import yt_dlp
 # ─── CONFIG ───────────────────────────────────────────────────────────────────
 BOT_TOKEN  = os.environ.get("BOT_TOKEN", "YOUR_BOT_TOKEN_HERE")
 CHANNEL_ID = os.environ.get("CHANNEL_ID", "@your_channel_username")
+COOKIES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cookies.txt")
  
 CREDIT = "\n\n━━━━━━━━━━━━━━━━━━━━━\n👨‍💻 *Developed by:* RH RATUL"
  
@@ -88,6 +89,12 @@ def download_video(url: str, tmp_dir: str) -> tuple[Path, str]:
         "no_warnings": True,
         "noplaylist": True,
     }
+ 
+    # cookies.txt থাকলে use করো
+    if os.path.exists(COOKIES_FILE):
+        ydl_opts["cookiefile"] = COOKIES_FILE
+        logger.info("Using cookies.txt for authentication")
+ 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=True)
         file_path = Path(ydl.prepare_filename(info))
@@ -103,7 +110,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
  
     yt_url = find_yt_url_in_message(message)
     if not yt_url:
-        # YouTube link নেই — unknown message এ reply
         await message.reply_text(
             "❓ *YouTube link পাওয়া যায়নি!*\n\n"
             "▶️ একটি YouTube link পাঠান অথবা\n"
@@ -125,7 +131,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"🔍 *ভিডিও খোঁজা হচ্ছে...*{CREDIT}",
                 parse_mode=ParseMode.MARKDOWN
             )
- 
             await status_msg.edit_text(
                 f"⬇️ *720p HD ডাউনলোড হচ্ছে...*\n_একটু অপেক্ষা করুন_{CREDIT}",
                 parse_mode=ParseMode.MARKDOWN
