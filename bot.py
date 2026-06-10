@@ -79,27 +79,34 @@ def find_yt_url_in_message(message) -> str | None:
                         return url
     return None
  
-# ─── DOWNLOAD ─────────────────────────────────────────────────────────────────
+# ─── DOWNLOAD — ffmpeg ছাড়াই কাজ করে ────────────────────────────────────────
 def download_video(url: str, tmp_dir: str) -> tuple[Path, str]:
     ydl_opts = {
-        "format": "bestvideo[height<=720]+bestaudio/best[height<=720]/bestvideo+bestaudio/best",
-        "merge_output_format": "mp4",
+        # ffmpeg ছাড়া যায় এমন pre-merged format
+        "format": "best[height<=720][ext=mp4]/best[ext=mp4]/best",
         "outtmpl": os.path.join(tmp_dir, "%(id)s.%(ext)s"),
         "quiet": True,
         "no_warnings": True,
         "noplaylist": True,
+        "nocheckcertificate": True,
+        # ffmpeg না থাকলে merge করার চেষ্টা করবে না
+        "prefer_ffmpeg": False,
+        "abort_on_unavailable_fragments": False,
     }
  
-    # cookies.txt থাকলে use করো
     if os.path.exists(COOKIES_FILE):
         ydl_opts["cookiefile"] = COOKIES_FILE
-        logger.info("Using cookies.txt for authentication")
+        logger.info("Using cookies.txt")
  
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=True)
         file_path = Path(ydl.prepare_filename(info))
         if not file_path.exists():
             file_path = file_path.with_suffix(".mp4")
+        if not file_path.exists():
+            files = list(Path(tmp_dir).glob("*.*"))
+            if files:
+                file_path = max(files, key=lambda f: f.stat().st_size)
         return file_path, info.get("title", "Episode")
  
 # ─── MESSAGE HANDLER ──────────────────────────────────────────────────────────
@@ -128,11 +135,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         with tempfile.TemporaryDirectory() as tmp_dir:
             await status_msg.edit_text(
-                f"🔍 *ভিডিও খোঁজা হচ্ছে...*{CREDIT}",
-                parse_mode=ParseMode.MARKDOWN
-            )
-            await status_msg.edit_text(
-                f"⬇️ *720p HD ডাউনলোড হচ্ছে...*\n_একটু অপেক্ষা করুন_{CREDIT}",
+                f"⬇️ *ডাউনলোড হচ্ছে...*\n_একটু অপেক্ষা করুন_{CREDIT}",
                 parse_mode=ParseMode.MARKDOWN
             )
             loop = asyncio.get_event_loop()
@@ -143,13 +146,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
  
             if file_size_mb > 1900:
                 await status_msg.edit_text(
-                    f"❌ ফাইল অনেক বড় (>1.9 GB)। পাঠানো সম্ভব নয়।{CREDIT}",
+                    f"❌ ফাইল অনেক বড় (>1.9 GB)।{CREDIT}",
                     parse_mode=ParseMode.MARKDOWN
                 )
                 return
  
             await status_msg.edit_text(
-                f"📤 *Telegram এ আপলোড হচ্ছে...*\n_📦 Size: {file_size_mb:.1f} MB_{CREDIT}",
+                f"📤 *আপলোড হচ্ছে...*\n_📦 Size: {file_size_mb:.1f} MB_{CREDIT}",
                 parse_mode=ParseMode.MARKDOWN
             )
  
@@ -220,11 +223,9 @@ def run_ping_server():
 def main():
     threading.Thread(target=run_ping_server, daemon=True).start()
     logger.info("Keep-alive server started.")
- 
     app = Application.builder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.ALL, handle_message))
- 
     logger.info("Bot started!")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
  
