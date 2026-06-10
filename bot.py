@@ -82,7 +82,7 @@ def find_yt_url_in_message(message) -> str | None:
 # ─── DOWNLOAD ─────────────────────────────────────────────────────────────────
 def download_video(url: str, tmp_dir: str) -> tuple[Path, str]:
     ydl_opts = {
-        "format": "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best[height<=720]",
+        "format": "bestvideo[height<=720]+bestaudio/best[height<=720]/bestvideo+bestaudio/best",
         "merge_output_format": "mp4",
         "outtmpl": os.path.join(tmp_dir, "%(id)s.%(ext)s"),
         "quiet": True,
@@ -229,4 +229,3 @@ def main():
     app.run_polling(allowed_updates=Update.ALL_TYPES)
  
 if __name__ == "__main__":
-    main()
