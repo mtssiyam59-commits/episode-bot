@@ -11,8 +11,8 @@ from telegram.constants import ParseMode
 import yt_dlp
 
 # ─── CONFIG ────────────────────────────────────────────────────────────────────
-BOT_TOKEN  = os.environ.get("BOT_TOKEN", "8241770582:AAEMIco0udyUQGloio12uggoBCou0cCyks8")
-CHANNEL_ID = os.environ.get("CHANNEL_ID", "@episode1249")
+BOT_TOKEN  = os.environ.get("BOT_TOKEN", "YOUR_BOT_TOKEN_HERE")
+CHANNEL_ID = os.environ.get("CHANNEL_ID", "@your_channel_username")
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
