@@ -1,3 +1,4 @@
+
 import os
 import re
 import asyncio
@@ -9,11 +10,13 @@ from telegram import Update
 from telegram.ext import Application, MessageHandler, CommandHandler, filters, ContextTypes
 from telegram.constants import ParseMode
 import yt_dlp
+import imageio_ffmpeg
  
 # ─── CONFIG ───────────────────────────────────────────────────────────────────
 BOT_TOKEN  = os.environ.get("BOT_TOKEN", "YOUR_BOT_TOKEN_HERE")
 CHANNEL_ID = os.environ.get("CHANNEL_ID", "@your_channel_username")
 COOKIES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cookies.txt")
+FFMPEG = imageio_ffmpeg.get_ffmpeg_exe()
  
 CREDIT = "\n\n━━━━━━━━━━━━━━━━━━━━━\n👨‍💻 *Developed by:* RH RATUL"
  
@@ -79,19 +82,30 @@ def find_yt_url_in_message(message) -> str | None:
                         return url
     return None
  
-# ─── DOWNLOAD — ffmpeg ছাড়াই কাজ করে ────────────────────────────────────────
+# ─── DOWNLOAD ─────────────────────────────────────────────────────────────────
 def download_video(url: str, tmp_dir: str) -> tuple[Path, str]:
     ydl_opts = {
-        # ffmpeg ছাড়া যায় এমন pre-merged format
-        "format": "best[height<=720][ext=mp4]/best[ext=mp4]/best",
+        "format": "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best[height<=720]/best",
         "outtmpl": os.path.join(tmp_dir, "%(id)s.%(ext)s"),
+        "merge_output_format": "mp4",
+        "ffmpeg_location": FFMPEG,
         "quiet": True,
         "no_warnings": True,
         "noplaylist": True,
         "nocheckcertificate": True,
-        # ffmpeg না থাকলে merge করার চেষ্টা করবে না
-        "prefer_ffmpeg": False,
-        "abort_on_unavailable_fragments": False,
+        "geo_bypass": True,
+        "geo_bypass_country": "US",
+        "retries": 5,
+        "fragment_retries": 5,
+        "http_headers": {
+            "User-Agent": "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36",
+            "Accept-Language": "en-US,en;q=0.9",
+        },
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["android", "android_vr", "web", "mweb"],
+            }
+        },
     }
  
     if os.path.exists(COOKIES_FILE):
@@ -101,8 +115,9 @@ def download_video(url: str, tmp_dir: str) -> tuple[Path, str]:
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=True)
         file_path = Path(ydl.prepare_filename(info))
-        if not file_path.exists():
-            file_path = file_path.with_suffix(".mp4")
+        for ext in [".webm", ".mkv"]:
+            if str(file_path).endswith(ext):
+                file_path = file_path.with_suffix(".mp4")
         if not file_path.exists():
             files = list(Path(tmp_dir).glob("*.*"))
             if files:
@@ -135,7 +150,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         with tempfile.TemporaryDirectory() as tmp_dir:
             await status_msg.edit_text(
-                f"⬇️ *ডাউনলোড হচ্ছে...*\n_একটু অপেক্ষা করুন_{CREDIT}",
+                f"⬇️ *720p HD ডাউনলোড হচ্ছে...*\n_একটু অপেক্ষা করুন_{CREDIT}",
                 parse_mode=ParseMode.MARKDOWN
             )
             loop = asyncio.get_event_loop()
@@ -231,3 +246,4 @@ def main():
  
 if __name__ == "__main__":
     main()
+ 
