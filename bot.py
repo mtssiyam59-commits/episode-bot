@@ -1,31 +1,30 @@
-
 import os
 import re
 import asyncio
 import logging
 import tempfile
 from pathlib import Path
- 
+
 from telegram import Update
 from telegram.ext import Application, MessageHandler, CommandHandler, filters, ContextTypes
 from telegram.constants import ParseMode
 import yt_dlp
 import imageio_ffmpeg
- 
+
 # ─── CONFIG ───────────────────────────────────────────────────────────────────
 BOT_TOKEN  = os.environ.get("BOT_TOKEN", "YOUR_BOT_TOKEN_HERE")
 CHANNEL_ID = os.environ.get("CHANNEL_ID", "@your_channel_username")
 COOKIES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cookies.txt")
 FFMPEG = imageio_ffmpeg.get_ffmpeg_exe()
- 
+
 CREDIT = "\n\n━━━━━━━━━━━━━━━━━━━━━\n👨‍💻 *Developed by:* RH RATUL"
- 
+
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
- 
+
 # ─── /start HANDLER ───────────────────────────────────────────────────────────
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -50,18 +49,18 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"{CREDIT}"
     )
     await update.message.reply_text(msg, parse_mode=ParseMode.MARKDOWN)
- 
+
 # ─── YouTube URL DETECT ───────────────────────────────────────────────────────
 YT_PATTERN = re.compile(
     r"(https?://)?(www\.)?"
     r"(youtube\.com/watch\?v=|youtu\.be/|youtube\.com/shorts/)"
     r"[\w\-]+"
 )
- 
+
 def extract_yt_url(text: str) -> str | None:
     match = YT_PATTERN.search(text or "")
     return match.group(0) if match else None
- 
+
 def find_yt_url_in_message(message) -> str | None:
     for src in [message.text, message.caption]:
         url = extract_yt_url(src)
@@ -81,13 +80,13 @@ def find_yt_url_in_message(message) -> str | None:
                     if url:
                         return url
     return None
- 
+
 # ─── DOWNLOAD ─────────────────────────────────────────────────────────────────
 def download_video(url: str, tmp_dir: str) -> tuple[Path, str]:
     ydl_opts = {
-        "format": "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best[height<=720]/best",
-        "outtmpl": os.path.join(tmp_dir, "%(id)s.%(ext)s"),
+        "format": "bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=360]+bestaudio/best[height<=360]/best[ext=mp4]/best",
         "merge_output_format": "mp4",
+        "outtmpl": os.path.join(tmp_dir, "%(id)s.%(ext)s"),
         "ffmpeg_location": FFMPEG,
         "quiet": True,
         "no_warnings": True,
@@ -107,29 +106,32 @@ def download_video(url: str, tmp_dir: str) -> tuple[Path, str]:
             }
         },
     }
- 
+
     if os.path.exists(COOKIES_FILE):
         ydl_opts["cookiefile"] = COOKIES_FILE
         logger.info("Using cookies.txt")
- 
+
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=True)
         file_path = Path(ydl.prepare_filename(info))
         for ext in [".webm", ".mkv"]:
-            if str(file_path).endswith(ext):
-                file_path = file_path.with_suffix(".mp4")
+            alt = file_path.with_suffix(ext)
+            if alt.exists():
+                file_path = alt
+        if not file_path.exists():
+            file_path = file_path.with_suffix(".mp4")
         if not file_path.exists():
             files = list(Path(tmp_dir).glob("*.*"))
             if files:
                 file_path = max(files, key=lambda f: f.stat().st_size)
         return file_path, info.get("title", "Episode")
- 
+
 # ─── MESSAGE HANDLER ──────────────────────────────────────────────────────────
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.effective_message
     if not message:
         return
- 
+
     yt_url = find_yt_url_in_message(message)
     if not yt_url:
         await message.reply_text(
@@ -140,13 +142,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode=ParseMode.MARKDOWN
         )
         return
- 
+
     chat_id = update.effective_chat.id
     status_msg = await message.reply_text(
         f"⏳ *প্রসেস শুরু হচ্ছে...*{CREDIT}",
         parse_mode=ParseMode.MARKDOWN
     )
- 
+
     try:
         with tempfile.TemporaryDirectory() as tmp_dir:
             await status_msg.edit_text(
@@ -155,22 +157,22 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             loop = asyncio.get_event_loop()
             file_path, title = await loop.run_in_executor(None, download_video, yt_url, tmp_dir)
- 
+
             file_size_mb = file_path.stat().st_size / (1024 * 1024)
             logger.info(f"Downloaded: {title} ({file_size_mb:.1f} MB)")
- 
+
             if file_size_mb > 1900:
                 await status_msg.edit_text(
                     f"❌ ফাইল অনেক বড় (>1.9 GB)।{CREDIT}",
                     parse_mode=ParseMode.MARKDOWN
                 )
                 return
- 
+
             await status_msg.edit_text(
                 f"📤 *আপলোড হচ্ছে...*\n_📦 Size: {file_size_mb:.1f} MB_{CREDIT}",
                 parse_mode=ParseMode.MARKDOWN
             )
- 
+
             caption = (
                 f"🎬 *{title}*\n"
                 f"━━━━━━━━━━━━━━━━━━━━━\n"
@@ -178,7 +180,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"🔗 *Source:* [YouTube]({yt_url})"
                 f"{CREDIT}"
             )
- 
+
             with open(file_path, "rb") as f:
                 sent = await context.bot.send_video(
                     chat_id=chat_id,
@@ -187,13 +189,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     parse_mode=ParseMode.MARKDOWN,
                     supports_streaming=True,
                 )
- 
+
             await context.bot.forward_message(
                 chat_id=CHANNEL_ID,
                 from_chat_id=chat_id,
                 message_id=sent.message_id,
             )
- 
+
             await status_msg.edit_text(
                 "╔══════════════════════╗\n"
                 "║   ✅ সম্পন্ন হয়েছে!   ║\n"
@@ -203,7 +205,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"{CREDIT}",
                 parse_mode=ParseMode.MARKDOWN
             )
- 
+
     except yt_dlp.utils.DownloadError as e:
         logger.error(f"Download error: {e}")
         await status_msg.edit_text(
@@ -216,11 +218,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"❌ *সমস্যা হয়েছে*\n\n`{e}`{CREDIT}",
             parse_mode=ParseMode.MARKDOWN
         )
- 
+
 # ─── KEEP ALIVE ───────────────────────────────────────────────────────────────
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import threading
- 
+
 class PingHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -228,12 +230,12 @@ class PingHandler(BaseHTTPRequestHandler):
         self.wfile.write(b"RH Episode Bot is alive!")
     def log_message(self, *args):
         pass
- 
+
 def run_ping_server():
     port = int(os.environ.get("PORT", 8080))
     server = HTTPServer(("0.0.0.0", port), PingHandler)
     server.serve_forever()
- 
+
 # ─── MAIN ─────────────────────────────────────────────────────────────────────
 def main():
     threading.Thread(target=run_ping_server, daemon=True).start()
@@ -243,7 +245,6 @@ def main():
     app.add_handler(MessageHandler(filters.ALL, handle_message))
     logger.info("Bot started!")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
- 
+
 if __name__ == "__main__":
     main()
- 
