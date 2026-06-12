@@ -15,6 +15,7 @@ import imageio_ffmpeg
  
 # ─── CONFIG ───────────────────────────────────────────────────────────────────
 BOT_TOKEN  = os.environ.get("BOT_TOKEN", "YOUR_BOT_TOKEN_HERE")
+LOCAL_API_URL = os.environ.get("LOCAL_API_URL", "")  # যেমন: http://telegram-api-server.railway.internal:8081
 CHANNEL_ID = os.environ.get("CHANNEL_ID", "@your_channel_username")
 FFMPEG = imageio_ffmpeg.get_ffmpeg_exe()
  
@@ -214,7 +215,10 @@ def run_server():
 def main():
     threading.Thread(target=run_server, daemon=True).start()
     logger.info("Keep-alive started.")
-    app = Application.builder().token(BOT_TOKEN).build()
+    builder = Application.builder().token(BOT_TOKEN)
+    if LOCAL_API_URL:
+        builder = builder.base_url(f"{LOCAL_API_URL}/bot").base_file_url(f"{LOCAL_API_URL}/file/bot")
+    app = builder.build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.ALL, handle_message))
     logger.info("Bot started!")
