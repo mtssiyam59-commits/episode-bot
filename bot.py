@@ -173,6 +173,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     caption=caption,
                     parse_mode=ParseMode.MARKDOWN,
                     supports_streaming=True,
+                    read_timeout=600,
+                    write_timeout=600,
+                    connect_timeout=60,
+                    pool_timeout=600,
                 )
  
             await context.bot.forward_message(
